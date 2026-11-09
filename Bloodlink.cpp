@@ -60,6 +60,12 @@ struct BloodRequest {
     int submitDay = 0;
 };
 
+// Stores a request ID together with its calculated priority score.
+struct PriorityEntry {
+    int requestId = 0;
+    int score = 0;
+};
+
 // Holds all data and counters belonging to the BloodLink system.
 struct BloodLinkSystem {
     vector<Hospital> hospitals;
@@ -537,6 +543,84 @@ void advanceDay(BloodLinkSystem& system, int numberOfDays) {
     printExpirationList("to be expired", unitsToBeExpiredIds);
 }
 
+// Counts the units of one blood type that are currently in stock.
+int countInStockUnits(const BloodLinkSystem& system, const string& bloodType) {
+    int count = 0;
+
+    for (const BloodUnit& unit : system.units) {
+        if (unit.status == UnitStatus::InStock && unit.bloodType == bloodType) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+// Prints the current stock for all eight blood types.
+void stockReport(const BloodLinkSystem& system) {
+    const vector<string> bloodTypes = {
+        "O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"
+    };
+
+    cout << "Day: " << system.currentDay << '\n';
+    cout << "Stock report:\n";
+
+    for (const string& bloodType : bloodTypes) {
+        cout << bloodType << ": "
+             << countInStockUnits(system, bloodType) << '\n';
+    }
+}
+
+// Prints the request statistics of one hospital.
+void hospitalReport(const BloodLinkSystem& system, int hospitalId) {
+    int hospitalIndex = findHospitalIndex(system, hospitalId);
+
+    if (hospitalIndex == -1) {
+        return;
+    }
+
+    const Hospital& hospital = system.hospitals[hospitalIndex];
+
+    cout << "Hospital " << hospital.id << " (" << hospital.name
+         << "): requests " << hospital.totalRequests
+         << ", fulfilled " << hospital.fulfilledRequests << '\n';
+}
+
+// Compares two priority entries: higher score first, then smaller ID.
+bool comparePriorityEntries(const PriorityEntry& left,
+                            const PriorityEntry& right) {
+    if (left.score != right.score) {
+        return left.score > right.score;
+    }
+
+    return left.requestId < right.requestId;
+}
+
+// Prints all pending requests in priority order without changing the queue.
+void priorityQueueReport(const BloodLinkSystem& system) {
+    if (system.pendingRequests.empty()) {
+        cout << "No pending requests\n";
+        return;
+    }
+
+    vector<PriorityEntry> priorityEntries;
+
+    for (const BloodRequest& request : system.pendingRequests) {
+        PriorityEntry entry;
+        entry.requestId = request.id;
+        entry.score = calculatePriorityScore(request, system.currentDay);
+        priorityEntries.push_back(entry);
+    }
+
+    sort(priorityEntries.begin(), priorityEntries.end(), comparePriorityEntries);
+
+    cout << "Priority queue:\n";
+
+    for (const PriorityEntry& entry : priorityEntries) {
+        cout << entry.requestId << ' ' << entry.score << '\n';
+    }
+}
+
 // Reads the donor ID and handles a donation command.
 void handleDonateCommand(BloodLinkSystem& system, stringstream& commandStream) {
     int donorId;
@@ -573,6 +657,26 @@ void handleAdvanceDayCommand(BloodLinkSystem& system,
     }
 }
 
+// Handles the stock report command.
+void handleStockReportCommand(const BloodLinkSystem& system) {
+    stockReport(system);
+}
+
+// Reads the hospital ID and handles a hospital report command.
+void handleHospitalReportCommand(const BloodLinkSystem& system,
+                                 stringstream& commandStream) {
+    int hospitalId;
+
+    if (commandStream >> hospitalId) {
+        hospitalReport(system, hospitalId);
+    }
+}
+
+// Handles the priority queue report command.
+void handlePriorityQueueCommand(const BloodLinkSystem& system) {
+    priorityQueueReport(system);
+}
+
 // Processes one command entered by the user.
 void processCommand(const string& commandLine, BloodLinkSystem& system) {
     stringstream commandStream(commandLine);
@@ -588,6 +692,12 @@ void processCommand(const string& commandLine, BloodLinkSystem& system) {
         handleFulfillCommand(system);
     } else if (command == "advance_day") {
         handleAdvanceDayCommand(system, commandStream);
+    } else if (command == "stock_report") {
+        handleStockReportCommand(system);
+    } else if (command == "hospital_report") {
+        handleHospitalReportCommand(system, commandStream);
+    } else if (command == "priority_queue") {
+        handlePriorityQueueCommand(system);
     }
 }
 
